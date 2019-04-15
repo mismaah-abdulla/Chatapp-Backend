@@ -1,5 +1,7 @@
 # Chatapp Backend
 
+
+## Project Setup
 ### Download Go and install
 https://golang.org/dl/
 
