@@ -1,7 +1,7 @@
 # Chatapp Backend
 Frontend repo - https://github.com/mismaah-abdulla/Chatapp-Frontend
 
-It's on http://128.199.105.161/#/Chats if the server is still running.
+Live on http://128.199.105.161/#/Chats if the server is still running.
 
 ## Project Setup
 ### Download Go and install
@@ -12,7 +12,7 @@ https://golang.org/dl/
 $ go get github.com/gorilla/websocket
 ```
 
-### Go to the src directory and run
+### In the src directory run
 ```
 $ go run main.go
 ```
