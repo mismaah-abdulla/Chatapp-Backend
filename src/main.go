@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
@@ -18,7 +20,23 @@ type Message struct {
 	Message  string `json:"message"`
 }
 
+// User structure
+type user struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+type allUsers []user
+
+var users = allUsers{
+	{
+		Username: "admin",
+		Password: "pass",
+	},
+}
+
 func main() {
+	router := mux.NewRouter().StrictSlash(true)
+	router.HandleFunc("/api", home)
 	fs := http.FileServer(http.Dir("../public"))
 	http.Handle("/", fs)
 	http.HandleFunc("/ws", handleConnections)
@@ -29,6 +47,10 @@ func main() {
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+}
+
+func home(w http.ResponseWriter, r *http.Request) {
+	json.NewEncoder(w).Encode(users)
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
