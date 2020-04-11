@@ -37,8 +37,8 @@ var users = allUsers{
 func main() {
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/api", home)
-	router.Handle("/", http.FileServer(http.Dir("../public")))
 	router.HandleFunc("/ws", handleConnections)
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("../public")))
 	go handleMessages()
 	log.Println("http server started on :8000")
 	err := http.ListenAndServe(":8000", router)
@@ -74,7 +74,7 @@ func handleMessages() {
 	for {
 		msg := <-broadcast
 		log.Println(msg)
-		f, err := os.OpenFile("messages.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, err := os.OpenFile("store/messages.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
