@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var clients = make(map[*websocket.Conn]bool)
@@ -21,22 +23,22 @@ type Message struct {
 }
 
 // User structure
-type user struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+type User struct {
+	Username string `json:"Username"`
+	Password string `json:"Password"`
+	Email    string `json:"Email"`
 }
-type allUsers []user
+type allUsers []User
 
-var users = allUsers{
-	{
-		Username: "admin",
-		Password: "pass",
-	},
-}
+var users = allUsers{}
 
 func main() {
+	file, _ := ioutil.ReadFile("store/users.json")
+	json.Unmarshal(file, &users)
+
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/api", home)
+	router.HandleFunc("/api/register", register)
 	router.HandleFunc("/ws", handleConnections)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("../public")))
 	go handleMessages()
@@ -48,7 +50,32 @@ func main() {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
+}
+
+func register(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var user User
+	_ = json.NewDecoder(r.Body).Decode(&user)
+	for _, v := range users {
+		if user.Username == v.Username {
+			http.Error(w, "Username not available.", 409)
+			return
+		}
+		if user.Email == v.Email {
+			http.Error(w, "An account has already been registered with the email entered.", 409)
+			return
+		}
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	user.Password = string(hashedPassword)
+	users = append(users, user)
+	jsonString, _ := json.Marshal(users)
+	ioutil.WriteFile("store/users.json", jsonString, os.ModePerm)
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
