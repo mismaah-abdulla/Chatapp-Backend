@@ -14,7 +14,7 @@
 importScripts("https://storage.googleapis.com/workbox-cdn/releases/3.6.3/workbox-sw.js");
 
 importScripts(
-  "precache-manifest.c0a89cd0753ccb9f02aa6cdc79ac3b57.js"
+  "precache-manifest.4f96ab310c047e5494fae615671cfdf9.js"
 );
 
 workbox.core.setCacheNameDetails({prefix: "chatapp"});
