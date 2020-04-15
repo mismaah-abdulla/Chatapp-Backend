@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
@@ -15,6 +17,7 @@ import (
 var clients = make(map[*websocket.Conn]bool)
 var broadcast = make(chan Message)
 var upgrader = websocket.Upgrader{}
+var jwtKey = []byte("dasanidrinkingwater")
 
 // Message structure
 type Message struct {
@@ -31,6 +34,12 @@ type User struct {
 type allUsers []User
 
 var users = allUsers{}
+
+// Claims structure
+type Claims struct {
+	Username string `json:"Username"`
+	jwt.StandardClaims
+}
 
 func main() {
 	file, _ := ioutil.ReadFile("store/users.json")
@@ -82,11 +91,37 @@ func register(w http.ResponseWriter, r *http.Request) {
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var user User
-	_ = json.NewDecoder(r.Body).Decode(&user)
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Invalid credentials.", 401)
+		return
+	}
 	for _, v := range users {
 		if user.Username == v.Username || user.Email == v.Email {
 			if comparePasswords([]byte(v.Password), []byte(user.Password)) {
-				http.Error(w, "Login successfull.", 200)
+				expirationTime := time.Now().Add(120 * time.Minute)
+				claims := &Claims{
+					Username: user.Username,
+					StandardClaims: jwt.StandardClaims{
+						ExpiresAt: expirationTime.Unix(),
+					},
+				}
+				token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+				tokenString, err := token.SignedString(jwtKey)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				// http.SetCookie(w, &http.Cookie{
+				// 	Name:    "token",
+				// 	Value:   tokenString,
+				// 	Expires: expirationTime,
+				// })
+				response := map[string]string{
+					"token":    tokenString,
+					"username": v.Username,
+				}
+				json.NewEncoder(w).Encode(response)
 				return
 			}
 		}
