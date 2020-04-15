@@ -37,8 +37,9 @@ func main() {
 	json.Unmarshal(file, &users)
 
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/api", home)
-	router.HandleFunc("/api/register", register)
+	router.HandleFunc("/api", home).Methods("GET")
+	router.HandleFunc("/api/register", register).Methods("POST")
+	router.HandleFunc("/api/login", login).Methods("POST")
 	router.HandleFunc("/ws", handleConnections)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("../public")))
 	go handleMessages()
@@ -76,6 +77,29 @@ func register(w http.ResponseWriter, r *http.Request) {
 	users = append(users, user)
 	jsonString, _ := json.Marshal(users)
 	ioutil.WriteFile("store/users.json", jsonString, os.ModePerm)
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var user User
+	_ = json.NewDecoder(r.Body).Decode(&user)
+	for _, v := range users {
+		if user.Username == v.Username || user.Email == v.Email {
+			if comparePasswords([]byte(v.Password), []byte(user.Password)) {
+				http.Error(w, "Login successfull.", 200)
+				return
+			}
+		}
+	}
+	http.Error(w, "Invalid credentials.", 401)
+}
+
+func comparePasswords(hashedPwd []byte, plainPwd []byte) bool {
+	err := bcrypt.CompareHashAndPassword(hashedPwd, plainPwd)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
