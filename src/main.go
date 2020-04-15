@@ -52,8 +52,8 @@ func main() {
 	router.HandleFunc("/ws", handleConnections)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("../public")))
 	go handleMessages()
-	log.Println("http server started on :8000")
-	err := http.ListenAndServe(":8000", router)
+	log.Println("http server started on :80")
+	err := http.ListenAndServe(":80", router)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
