@@ -44,6 +44,7 @@ func main() {
 	router.HandleFunc("/api", home).Methods("GET")
 	router.HandleFunc("/api/register", register).Methods("POST")
 	router.HandleFunc("/api/login", login).Methods("POST")
+	router.HandleFunc("/api/messages", messages).Methods("GET")
 	router.HandleFunc("/ws", handleConnections)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("../public")))
 	go handleMessages()
@@ -158,7 +159,7 @@ func comparePasswords(hashedPwd []byte, plainPwd []byte) bool {
 }
 
 func messages(w http.ResponseWriter, r *http.Request) {
-	database, _ := sql.Open("sqlite3", "./store/messages.db")
+	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, message, timestamp FROM messages")
 	var messages []Message
 	for rows.Next() {
