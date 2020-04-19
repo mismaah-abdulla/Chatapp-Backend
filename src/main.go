@@ -64,7 +64,6 @@ func home(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&user.Username, &user.Password, &user.Email)
 		u = append(u, user)
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(u)
 }
@@ -76,7 +75,6 @@ func register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Invalid.", 401)
 	}
-
 	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, password, email FROM users")
 	for rows.Next() {
@@ -96,7 +94,6 @@ func register(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	user.Password = string(hashedPassword)
-
 	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT, email TEXT, created_on INTEGER)")
 	statement.Exec()
 	statement, _ = database.Prepare("INSERT INTO users (username, password, email, created_on) VALUES (?, ?, ?, ?)")
@@ -112,7 +109,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid credentials.", 401)
 		return
 	}
-
 	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, password, email FROM users")
 	for rows.Next() {
@@ -167,7 +163,6 @@ func messages(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&msg.Username, &msg.Message, &msg.Timestamp)
 		messages = append(messages, msg)
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)
 }
@@ -195,14 +190,11 @@ func handleMessages() {
 	for {
 		msg := <-broadcast
 		log.Println(msg)
-
 		database, _ := sql.Open("sqlite3", "./database.db")
 		statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, username TEXT, message TEXT, timestamp INTEGER)")
 		statement.Exec()
 		statement, _ = database.Prepare("INSERT INTO messages (username, message, timestamp) VALUES (?, ?, ?)")
-		now := time.Now().Unix()
-		statement.Exec(&msg.Username, &msg.Message, now)
-
+		statement.Exec(&msg.Username, &msg.Message, &msg.Timestamp)
 		for client := range clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
