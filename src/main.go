@@ -1,16 +1,16 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,8 +21,9 @@ var jwtKey = []byte("dasanidrinkingwater")
 
 // Message structure
 type Message struct {
-	Username string `json:"username"`
-	Message  string `json:"message"`
+	Timestamp int    `json:"timestamp"`
+	Username  string `json:"username"`
+	Message   string `json:"message"`
 }
 
 // User structure
@@ -31,9 +32,6 @@ type User struct {
 	Password string `json:"Password"`
 	Email    string `json:"Email"`
 }
-type allUsers []User
-
-var users = allUsers{}
 
 // Claims structure
 type Claims struct {
@@ -42,9 +40,6 @@ type Claims struct {
 }
 
 func main() {
-	file, _ := ioutil.ReadFile("store/users.json")
-	json.Unmarshal(file, &users)
-
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/api", home).Methods("GET")
 	router.HandleFunc("/api/register", register).Methods("POST")
@@ -52,23 +47,40 @@ func main() {
 	router.HandleFunc("/ws", handleConnections)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("../public")))
 	go handleMessages()
-	log.Println("http server started on :80")
-	err := http.ListenAndServe(":80", router)
+	log.Println("http server started on :8000")
+	err := http.ListenAndServe(":8000", router)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
+	database, _ := sql.Open("sqlite3", "./database.db")
+	rows, _ := database.Query("SELECT username, password, email FROM users")
+	var u []User
+	for rows.Next() {
+		var user User
+		rows.Scan(&user.Username, &user.Password, &user.Email)
+		u = append(u, user)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(u)
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var user User
-	_ = json.NewDecoder(r.Body).Decode(&user)
-	for _, v := range users {
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Invalid.", 401)
+	}
+
+	database, _ := sql.Open("sqlite3", "./database.db")
+	rows, _ := database.Query("SELECT username, password, email FROM users")
+	for rows.Next() {
+		var v User
+		rows.Scan(&v.Username, &v.Password, &v.Email)
 		if user.Username == v.Username {
 			http.Error(w, "Username not available.", 409)
 			return
@@ -83,9 +95,12 @@ func register(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	user.Password = string(hashedPassword)
-	users = append(users, user)
-	jsonString, _ := json.Marshal(users)
-	ioutil.WriteFile("store/users.json", jsonString, os.ModePerm)
+
+	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT, email TEXT, created_on INTEGER)")
+	statement.Exec()
+	statement, _ = database.Prepare("INSERT INTO users (username, password, email, created_on) VALUES (?, ?, ?, ?)")
+	now := time.Now().Unix()
+	statement.Exec(&user.Username, &user.Password, &user.Email, now)
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +111,12 @@ func login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid credentials.", 401)
 		return
 	}
-	for _, v := range users {
+
+	database, _ := sql.Open("sqlite3", "./database.db")
+	rows, _ := database.Query("SELECT username, password, email FROM users")
+	for rows.Next() {
+		var v User
+		rows.Scan(&v.Username, &v.Password, &v.Email)
 		if user.Username == v.Username || user.Email == v.Email {
 			if comparePasswords([]byte(v.Password), []byte(user.Password)) {
 				expirationTime := time.Now().Add(120 * time.Minute)
@@ -137,6 +157,20 @@ func comparePasswords(hashedPwd []byte, plainPwd []byte) bool {
 	return true
 }
 
+func messages(w http.ResponseWriter, r *http.Request) {
+	database, _ := sql.Open("sqlite3", "./store/messages.db")
+	rows, _ := database.Query("SELECT username, message, timestamp FROM messages")
+	var messages []Message
+	for rows.Next() {
+		var msg Message
+		rows.Scan(&msg.Username, &msg.Message, &msg.Timestamp)
+		messages = append(messages, msg)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -160,16 +194,14 @@ func handleMessages() {
 	for {
 		msg := <-broadcast
 		log.Println(msg)
-		f, err := os.OpenFile("store/messages.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if _, err := f.Write([]byte(msg.Username + ": " + msg.Message + "\n")); err != nil {
-			log.Fatal(err)
-		}
-		if err := f.Close(); err != nil {
-			log.Fatal(err)
-		}
+
+		database, _ := sql.Open("sqlite3", "./database.db")
+		statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, username TEXT, message TEXT, timestamp INTEGER)")
+		statement.Exec()
+		statement, _ = database.Prepare("INSERT INTO messages (username, message, timestamp) VALUES (?, ?, ?)")
+		now := time.Now().Unix()
+		statement.Exec(&msg.Username, &msg.Message, now)
+
 		for client := range clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
