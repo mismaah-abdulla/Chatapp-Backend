@@ -18,6 +18,9 @@ var clients = make(map[*websocket.Conn]bool)
 var broadcast = make(chan Message)
 var upgrader = websocket.Upgrader{}
 var jwtKey = []byte("dasanidrinkingwater")
+var database *sql.DB
+var usersStatement *sql.Stmt
+var msgsStatement *sql.Stmt
 
 // Message structure
 type Message struct {
@@ -40,6 +43,8 @@ type Claims struct {
 }
 
 func main() {
+	database, _ = sql.Open("sqlite3", "./database.db")
+	prepDB()
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/api", home).Methods("GET")
 	router.HandleFunc("/api/register", register).Methods("POST")
@@ -55,8 +60,16 @@ func main() {
 	}
 }
 
+func prepDB() {
+	usersStatement, _ = database.Prepare("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT, email TEXT, created_on INTEGER)")
+	usersStatement.Exec()
+	usersStatement, _ = database.Prepare("INSERT INTO users (username, password, email, created_on) VALUES (?, ?, ?, ?)")
+	msgsStatement, _ = database.Prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, username TEXT, message TEXT, timestamp INTEGER)")
+	msgsStatement.Exec()
+	msgsStatement, _ = database.Prepare("INSERT INTO messages (username, message, timestamp) VALUES (?, ?, ?)")
+}
+
 func home(w http.ResponseWriter, r *http.Request) {
-	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, password, email FROM users")
 	var u []User
 	for rows.Next() {
@@ -75,7 +88,6 @@ func register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Invalid.", 401)
 	}
-	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, password, email FROM users")
 	for rows.Next() {
 		var v User
@@ -94,11 +106,8 @@ func register(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	user.Password = string(hashedPassword)
-	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT, email TEXT, created_on INTEGER)")
-	statement.Exec()
-	statement, _ = database.Prepare("INSERT INTO users (username, password, email, created_on) VALUES (?, ?, ?, ?)")
 	now := time.Now().Unix()
-	statement.Exec(&user.Username, &user.Password, &user.Email, now)
+	usersStatement.Exec(&user.Username, &user.Password, &user.Email, now)
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +118,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid credentials.", 401)
 		return
 	}
-	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, password, email FROM users")
 	for rows.Next() {
 		var v User
@@ -155,7 +163,6 @@ func comparePasswords(hashedPwd []byte, plainPwd []byte) bool {
 }
 
 func messages(w http.ResponseWriter, r *http.Request) {
-	database, _ := sql.Open("sqlite3", "./database.db")
 	rows, _ := database.Query("SELECT username, message, timestamp FROM messages")
 	var messages []Message
 	for rows.Next() {
@@ -190,11 +197,7 @@ func handleMessages() {
 	for {
 		msg := <-broadcast
 		log.Println(msg)
-		database, _ := sql.Open("sqlite3", "./database.db")
-		statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, username TEXT, message TEXT, timestamp INTEGER)")
-		statement.Exec()
-		statement, _ = database.Prepare("INSERT INTO messages (username, message, timestamp) VALUES (?, ?, ?)")
-		statement.Exec(&msg.Username, &msg.Message, &msg.Timestamp)
+		msgsStatement.Exec(&msg.Username, &msg.Message, &msg.Timestamp)
 		for client := range clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
