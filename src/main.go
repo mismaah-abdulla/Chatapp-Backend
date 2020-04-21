@@ -197,7 +197,10 @@ func handleMessages() {
 	for {
 		msg := <-broadcast
 		log.Println(msg)
+		start := time.Now().UnixNano()
 		msgsStatement.Exec(&msg.Username, &msg.Message, &msg.Timestamp)
+		end := time.Now().UnixNano()
+		log.Println("Data write takes ", end-start, " nanoseconds.")
 		for client := range clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
