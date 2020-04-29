@@ -72,6 +72,7 @@ func prepDB() {
 func home(w http.ResponseWriter, r *http.Request) {
 	rows, _ := database.Query("SELECT username, password, email FROM users")
 	var u []User
+	defer rows.Close()
 	for rows.Next() {
 		var user User
 		rows.Scan(&user.Username, &user.Password, &user.Email)
@@ -89,6 +90,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid.", 401)
 	}
 	rows, _ := database.Query("SELECT username, password, email FROM users")
+	defer rows.Close()
 	for rows.Next() {
 		var v User
 		rows.Scan(&v.Username, &v.Password, &v.Email)
@@ -119,6 +121,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, _ := database.Query("SELECT username, password, email FROM users")
+	defer rows.Close()
 	for rows.Next() {
 		var v User
 		rows.Scan(&v.Username, &v.Password, &v.Email)
@@ -164,6 +167,7 @@ func comparePasswords(hashedPwd []byte, plainPwd []byte) bool {
 
 func messages(w http.ResponseWriter, r *http.Request) {
 	rows, _ := database.Query("SELECT username, message, timestamp FROM messages")
+	defer rows.Close()
 	var messages []Message
 	for rows.Next() {
 		var msg Message
@@ -197,10 +201,10 @@ func handleMessages() {
 	for {
 		msg := <-broadcast
 		log.Println(msg)
-		start := time.Now().UnixNano()
-		msgsStatement.Exec(&msg.Username, &msg.Message, &msg.Timestamp)
-		end := time.Now().UnixNano()
-		log.Println("Data write takes ", end-start, " nanoseconds.")
+		_, err := msgsStatement.Exec(&msg.Username, &msg.Message, &msg.Timestamp)
+		if err != nil {
+			log.Printf("DB Write err: %v", err)
+		}
 		for client := range clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
