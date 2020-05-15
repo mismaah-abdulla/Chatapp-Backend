@@ -4,8 +4,8 @@ self.__precacheManifest = [
     "url": "githubLogo.png"
   },
   {
-    "revision": "5d001062ca39daa8b36c",
-    "url": "css/app.f6ae5f57.css"
+    "revision": "1b84b0ece6fe3033cc75",
+    "url": "css/app.0f253854.css"
   },
   {
     "revision": "444b22e4dd6a2a596359",
@@ -16,12 +16,12 @@ self.__precacheManifest = [
     "url": "js/chunk-vendors.b7cde19a.js"
   },
   {
-    "revision": "19bfe19e628365cf52e5ecdc8c4a5105",
+    "revision": "30db0431f84b65942af8f4443d2f720f",
     "url": "index.html"
   },
   {
-    "revision": "5d001062ca39daa8b36c",
-    "url": "js/app.28a1df79.js"
+    "revision": "1b84b0ece6fe3033cc75",
+    "url": "js/app.eeba8675.js"
   },
   {
     "revision": "735ab4f94fbcd57074377afca324c813",
